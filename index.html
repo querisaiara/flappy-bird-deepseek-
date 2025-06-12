@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Flappy Bird</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #222;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      border: 2px solid #444;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+<script>
+// Game constants
+const SCREEN_WIDTH = 800;
+const SCREEN_HEIGHT = 600;
+const BIRD_SIZE = 30;
+const GRAVITY = 0.4;
+const LIFT = -8;
+const PIPE_WIDTH = 80;
+const PIPE_GAP = 200;
+const PIPE_SPEED = 3;
+const PIPE_FREQUENCY = 1800; // ms
+
+// Game variables
+let bird;
+let pipes = [];
+let score = 0;
+let highScore = 0;
+let gameOver = false;
+let gameStarted = false;
+let lastPipeTime = 0;
+
+function setup() {
+  createCanvas(SCREEN_WIDTH, SCREEN_HEIGHT);
+  frameRate(60);
+  
+  // Initialize bird
+  bird = {
+    x: SCREEN_WIDTH / 4,
+    y: SCREEN_HEIGHT / 2,
+    radius: BIRD_SIZE / 2,
+    velocity: 0,
+    color: [255, 255, 0]
+  };
+  
+  // Load high score from localStorage
+  highScore = localStorage.getItem('flappyHighScore') || 0;
+}
+
+function draw() {
+  // Sky background
+  background(135, 206, 235);
+  
+  // Draw ground
+  fill(139, 69, 19);
+  noStroke();
+  rect(0, SCREEN_HEIGHT - 40, SCREEN_WIDTH, 40);
+  
+  if (!gameStarted) {
+    // Start screen
+    fill(255);
+    textSize(48);
+    textAlign(CENTER);
+    text("FLAPPY BIRD", SCREEN_WIDTH/2, SCREEN_HEIGHT/2 - 60);
+    textSize(24);
+    text("Press SPACE to start", SCREEN_WIDTH/2, SCREEN_HEIGHT/2);
+    text("High Score: " + highScore, SCREEN_WIDTH/2, SCREEN_HEIGHT/2 + 40);
+    return;
+  }
+  
+  if (gameOver) {
+    // Game over screen
+    fill(255, 0, 0, 200);
+    rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    fill(255);
+    textSize(48);
+    textAlign(CENTER);
+    text("GAME OVER", SCREEN_WIDTH/2, SCREEN_HEIGHT/2 - 60);
+    textSize(32);
+    text("Score: " + score, SCREEN_WIDTH/2, SCREEN_HEIGHT/2);
+    text("High Score: " + highScore, SCREEN_WIDTH/2, SCREEN_HEIGHT/2 + 40);
+    textSize(24);
+    text("Press SPACE to restart", SCREEN_WIDTH/2, SCREEN_HEIGHT/2 + 100);
+    return;
+  }
+  
+  // Update bird physics
+  bird.velocity += GRAVITY;
+  bird.y += bird.velocity;
+  
+  // Draw bird
+  fill(bird.color);
+  noStroke();
+  ellipse(bird.x, bird.y, BIRD_SIZE);
+  
+  // Generate pipes
+  if (millis() - lastPipeTime > PIPE_FREQUENCY) {
+    pipes.push(new Pipe());
+    lastPipeTime = millis();
+  }
+  
+  // Update and draw pipes
+  for (let i = pipes.length - 1; i >= 0; i--) {
+    pipes[i].update();
+    pipes[i].show();
+    
+    // Check collisions
+    if (pipes[i].hits(bird)) {
+      endGame();
+    }
+    
+    // Remove offscreen pipes and increase score
+    if (pipes[i].offscreen()) {
+      pipes.splice(i, 1);
+      score++;
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('flappyHighScore', highScore);
+      }
+    }
+  }
+  
+  // Check boundaries
+  if (bird.y + bird.radius > SCREEN_HEIGHT - 40 || bird.y - bird.radius < 0) {
+    endGame();
+  }
+  
+  // Display score
+  fill(255);
+  textSize(32);
+  textAlign(LEFT);
+  text("Score: " + score, 20, 40);
+  text("High: " + highScore, 20, 80);
+}
+
+function keyPressed() {
+  if (key === ' ') {
+    if (!gameStarted) {
+      gameStarted = true;
+    } else if (gameOver) {
+      resetGame();
+    } else {
+      bird.velocity = LIFT;
+    }
+  }
+}
+
+// Pipe class
+class Pipe {
+  constructor() {
+    this.x = SCREEN_WIDTH;
+    this.width = PIPE_WIDTH;
+    this.topHeight = random(100, SCREEN_HEIGHT - PIPE_GAP - 100 - 40);
+    this.bottomHeight = SCREEN_HEIGHT - this.topHeight - PIPE_GAP - 40;
+    this.passed = false;
+  }
+  
+  update() {
+    this.x -= PIPE_SPEED;
+  }
+  
+  show() {
+    fill(0, 180, 0);
+    // Top pipe
+    rect(this.x, 0, this.width, this.topHeight);
+    // Bottom pipe
+    rect(this.x, SCREEN_HEIGHT - this.bottomHeight - 40, this.width, this.bottomHeight);
+  }
+  
+  hits(bird) {
+    if ((bird.y - bird.radius < this.topHeight || 
+         bird.y + bird.radius > SCREEN_HEIGHT - this.bottomHeight - 40) && 
+        (bird.x + bird.radius > this.x && 
+         bird.x - bird.radius < this.x + this.width)) {
+      return true;
+    }
+    return false;
+  }
+  
+  offscreen() {
+    return this.x < -this.width;
+  }
+}
+
+function endGame() {
+  gameOver = true;
+}
+
+function resetGame() {
+  bird.y = SCREEN_HEIGHT / 2;
+  bird.velocity = 0;
+  pipes = [];
+  score = 0;
+  gameOver = false;
+  lastPipeTime = millis();
+}
+</script>
+</body>
+</html>
