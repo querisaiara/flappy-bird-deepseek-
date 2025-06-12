@@ -228,6 +228,9 @@ async function keyPressed() {
       isProcessingTransaction = false;
       if (success) {
         gameStarted = true;
+        // Сброс физики при старте
+        bird.y = SCREEN_HEIGHT / 2;
+        bird.velocity = 0;
       }
     } else if (gameOver) {
       isProcessingTransaction = true;
@@ -237,7 +240,7 @@ async function keyPressed() {
         resetGame();
       }
     } else {
-      bird.velocity = LIFT;
+      bird.velocity = LIFT; // Прыжок работает даже во время транзакции
     }
   }
 }
