@@ -54,7 +54,7 @@ const LIFT = -8;
 const PIPE_WIDTH = 80;
 const PIPE_GAP = 200;
 const PIPE_SPEED = 3;
-const PIPE_FREQUENCY = 1800; // ms
+const PIPE_FREQUENCY = 1800;
 
 // Game variables
 let bird;
@@ -64,12 +64,13 @@ let highScore = 0;
 let gameOver = false;
 let gameStarted = false;
 let lastPipeTime = 0;
+let isProcessingTransaction = false;
 
 // Blockchain variables
 let web3;
 let account;
 const MONAD_RPC = 'wss://monad-testnet.drpc.org';
-const GAME_FEE = '0.01'; // 0.01 MON
+const GAME_FEE = '0.01';
 
 async function initWeb3() {
   if (window.ethereum) {
@@ -84,27 +85,21 @@ async function initWeb3() {
       walletInfo.style.display = 'block';
       walletInfo.textContent = `Connected: ${account.substring(0, 6)}...${account.substring(38)}`;
       
-      // Switch to Monad network
-      try {
-        await window.ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [{
-            chainId: '0x4d',
-            chainName: 'Monad Testnet',
-            nativeCurrency: {
-              name: 'Monad',
-              symbol: 'MON',
-              decimals: 18
-            },
-            rpcUrls: [MONAD_RPC],
-            blockExplorerUrls: ['https://explorer.monad.xyz/']
-          }]
-        });
-      } catch (addError) {
-        console.error('Error adding Monad network:', addError);
-      }
+      await window.ethereum.request({
+        method: 'wallet_addEthereumChain',
+        params: [{
+          chainId: '0x4d',
+          chainName: 'Monad Testnet',
+          nativeCurrency: {
+            name: 'Monad',
+            symbol: 'MON',
+            decimals: 18
+          },
+          rpcUrls: [MONAD_RPC]
+        }]
+      });
     } catch (error) {
-      console.error('User denied account access', error);
+      console.error('Error:', error);
     }
   } else {
     alert('Please install MetaMask to play this game!');
@@ -117,13 +112,12 @@ async function sendGameFee() {
   try {
     const tx = {
       from: account,
-      to: '0x98276FF9b17a2eA4A5b6b472C761b4aF169405d6', // Sending to zero address for demo
+      to: '0x54807240214c2eb71f7af8c0327bc26f146760f3',
       value: web3.utils.toWei(GAME_FEE, 'ether'),
       gas: 21000
     };
     
-    const txHash = await web3.eth.sendTransaction(tx);
-    console.log('Transaction sent:', txHash);
+    await web3.eth.sendTransaction(tx);
     return true;
   } catch (error) {
     console.error('Transaction failed:', error);
@@ -137,7 +131,6 @@ function setup() {
   createCanvas(SCREEN_WIDTH, SCREEN_HEIGHT);
   frameRate(60);
   
-  // Initialize bird
   bird = {
     x: SCREEN_WIDTH / 4,
     y: SCREEN_HEIGHT / 2,
@@ -146,21 +139,17 @@ function setup() {
     color: [255, 255, 0]
   };
   
-  // Load high score from localStorage
   highScore = localStorage.getItem('flappyHighScore') || 0;
 }
 
 function draw() {
-  // Sky background
   background(135, 206, 235);
   
-  // Draw ground
   fill(139, 69, 19);
   noStroke();
   rect(0, SCREEN_HEIGHT - 40, SCREEN_WIDTH, 40);
   
   if (!gameStarted) {
-    // Start screen
     fill(255);
     textSize(48);
     textAlign(CENTER);
@@ -172,7 +161,6 @@ function draw() {
   }
   
   if (gameOver) {
-    // Game over screen
     fill(255, 0, 0, 200);
     rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
     fill(255);
@@ -187,32 +175,26 @@ function draw() {
     return;
   }
   
-  // Update bird physics
   bird.velocity += GRAVITY;
   bird.y += bird.velocity;
   
-  // Draw bird
   fill(bird.color);
   noStroke();
   ellipse(bird.x, bird.y, BIRD_SIZE);
   
-  // Generate pipes
   if (millis() - lastPipeTime > PIPE_FREQUENCY) {
     pipes.push(new Pipe());
     lastPipeTime = millis();
   }
   
-  // Update and draw pipes
   for (let i = pipes.length - 1; i >= 0; i--) {
     pipes[i].update();
     pipes[i].show();
     
-    // Check collisions
     if (pipes[i].hits(bird)) {
       endGame();
     }
     
-    // Remove offscreen pipes and increase score
     if (pipes[i].offscreen()) {
       pipes.splice(i, 1);
       score++;
@@ -223,12 +205,10 @@ function draw() {
     }
   }
   
-  // Check boundaries
   if (bird.y + bird.radius > SCREEN_HEIGHT - 40 || bird.y - bird.radius < 0) {
     endGame();
   }
   
-  // Display score
   fill(255);
   textSize(32);
   textAlign(LEFT);
@@ -237,18 +217,22 @@ function draw() {
 }
 
 async function keyPressed() {
-  if (key === ' ') {
+  if (key === ' ' && !isProcessingTransaction) {
     if (!gameStarted) {
       if (!account) {
         alert('Please connect your wallet first!');
         return;
       }
+      isProcessingTransaction = true;
       const success = await sendGameFee();
+      isProcessingTransaction = false;
       if (success) {
         gameStarted = true;
       }
     } else if (gameOver) {
+      isProcessingTransaction = true;
       const success = await sendGameFee();
+      isProcessingTransaction = false;
       if (success) {
         resetGame();
       }
@@ -258,14 +242,12 @@ async function keyPressed() {
   }
 }
 
-// Pipe class
 class Pipe {
   constructor() {
     this.x = SCREEN_WIDTH;
     this.width = PIPE_WIDTH;
     this.topHeight = random(100, SCREEN_HEIGHT - PIPE_GAP - 100 - 40);
     this.bottomHeight = SCREEN_HEIGHT - this.topHeight - PIPE_GAP - 40;
-    this.passed = false;
   }
   
   update() {
@@ -274,20 +256,15 @@ class Pipe {
   
   show() {
     fill(0, 180, 0);
-    // Top pipe
     rect(this.x, 0, this.width, this.topHeight);
-    // Bottom pipe
     rect(this.x, SCREEN_HEIGHT - this.bottomHeight - 40, this.width, this.bottomHeight);
   }
   
   hits(bird) {
-    if ((bird.y - bird.radius < this.topHeight || 
-         bird.y + bird.radius > SCREEN_HEIGHT - this.bottomHeight - 40) && 
-        (bird.x + bird.radius > this.x && 
-         bird.x - bird.radius < this.x + this.width)) {
-      return true;
-    }
-    return false;
+    return ((bird.y - bird.radius < this.topHeight || 
+            bird.y + bird.radius > SCREEN_HEIGHT - this.bottomHeight - 40) && 
+           (bird.x + bird.radius > this.x && 
+            bird.x - bird.radius < this.x + this.width));
   }
   
   offscreen() {
